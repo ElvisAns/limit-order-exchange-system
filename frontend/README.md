@@ -1,75 +1,76 @@
-# Nuxt Minimal Starter
+# Frontend - Nuxt 3 SPA
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
-
-## Setup
-
-Make sure to install dependencies:
+## Installation
 
 ```bash
-# npm
 npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
+## Configuration
 
-Start the development server on `http://localhost:3000`:
+Create `.env`:
+
+```env
+NUXT_BACKEND_URL=http://localhost:8000
+NUXT_PUSHER_KEY=your_pusher_key
+NUXT_PUSHER_CLUSTER=ap2
+```
+
+**Important**: `NUXT_PUSHER_KEY` must match backend's `PUSHER_APP_KEY`
+
+## Run
 
 ```bash
-# npm
 npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
 
-## Production
+Open: http://localhost:3000
 
-Build the application for production:
+## Project Structure
+
+```
+app/
+├── composables/
+│   ├── useApi.ts      # HTTP client
+│   ├── useAuth.ts     # Authentication
+│   └── useOrders.ts   # Order management
+└── pages/
+    ├── index.vue      # Landing
+    ├── login.vue      # Login
+    ├── register.vue   # Register
+    └── dashboard.vue  # Trading dashboard
+```
+
+## Features
+
+- **Real-time orderbook** with Pusher WebSockets
+- **Connection status** indicator (🟢 Live / 🟡 Connecting / 🔴 Disconnected)
+- **Quick trade**: Click orderbook entries to pre-fill form
+- **Live notifications**: Toast alerts for all actions
+- **Responsive design**: Works on all devices
+
+## Build
 
 ```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+npm run build      # Production build
+npm run preview    # Preview production
 ```
 
-Locally preview production build:
+## Troubleshooting
 
+**Styles not loading?**
 ```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
+rm -rf .nuxt node_modules/.cache
+npm install
+npm run dev
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+**Pusher not connecting?**
+- Check browser console (F12) for errors
+- Verify `NUXT_PUSHER_KEY` matches backend
+- Check connection status badge
+
+**API failing?**
+- Ensure backend is running on port 8000
+- Check `NUXT_BACKEND_URL` is correct
+- Verify token in cookies (F12 → Application → Cookies)

@@ -1,59 +1,84 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Backend - Laravel API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Installation
 
-## About Laravel
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Configuration
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Edit `.env`:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```env
+BROADCAST_CONNECTION=pusher
+QUEUE_CONNECTION=database
 
-## Learning Laravel
+PUSHER_APP_ID=your_app_id
+PUSHER_APP_KEY=your_key
+PUSHER_APP_SECRET=your_secret
+PUSHER_APP_CLUSTER=ap2
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+SANCTUM_STATEFUL_DOMAINS=localhost,localhost:3000,127.0.0.1,127.0.0.1:8000
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Database
 
-## Laravel Sponsors
+```bash
+php artisan migrate
+php artisan db:seed  # Optional: creates test users & orders
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Run
 
-### Premium Partners
+```bash
+# Terminal 1: API server
+php artisan serve
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+# Terminal 2: Queue worker (required!)
+php artisan queue:work
+```
 
-## Contributing
+## API Routes
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```
+POST /api/register - Register user
+POST /api/login - Login
+POST /api/logout - Logout
+GET  /api/profile - Get user with assets
+GET  /api/orders?symbol=BTC - Get orderbook
+POST /api/orders - Create order
+POST /api/orders/{id}/cancel - Cancel order
+GET  /api/trades - Get user trades
+```
 
-## Code of Conduct
+## Database Schema
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**users**: `id`, `name`, `email`, `password`, `balance` (USD)  
+**assets**: `user_id`, `symbol`, `amount`, `locked_amount`  
+**orders**: `user_id`, `symbol`, `side`, `price`, `amount`, `status`  
+**trades**: `buy_order_id`, `sell_order_id`, `buyer_id`, `seller_id`, `symbol`, `price`, `amount`
 
-## Security Vulnerabilities
+## Broadcasting Events
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+**Private Channel**: `private-App.Models.User.{id}`  
+- `order.matched` - When user's order executes
 
-## License
+**Public Channel**: `orderbook.{symbol}`  
+- `orderbook.updated` - When orderbook changes
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Debugging
+
+```bash
+# View logs
+tail -f storage/logs/laravel.log
+
+# Check queue
+php artisan queue:failed
+php artisan queue:restart
+
+# Code formatting
+vendor/bin/pint
+```
