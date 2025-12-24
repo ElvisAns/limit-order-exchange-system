@@ -14,7 +14,25 @@
       <div class="border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div class="flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-black">Dashboard</h1>
+            <div class="flex items-center gap-3">
+              <h1 class="text-2xl font-bold text-black">Dashboard</h1>
+              <!-- Connection Status Indicator -->
+              <UBadge 
+                :color="connectionStatus === 'connected' ? 'green' : connectionStatus === 'connecting' ? 'yellow' : 'red'" 
+                variant="soft"
+                size="xs"
+              >
+                <template v-if="connectionStatus === 'connected'">
+                  🟢 Live
+                </template>
+                <template v-else-if="connectionStatus === 'connecting'">
+                  🟡 Connecting...
+                </template>
+                <template v-else>
+                  🔴 Disconnected
+                </template>
+              </UBadge>
+            </div>
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-600">{{ profile?.name }}</span  >
               <UButton color="neutral" @click="handleLogout">
@@ -255,34 +273,17 @@
               :columns="orderColumns"
               class="flex-1 max-h-[312px]" 
             >
-              <template #side-data="{ row }">
-                <UBadge
-                  :color="row.side === 'buy' ? 'green' : 'red'"
-                  variant="soft"
-                >
-                  {{ row.side.toUpperCase() }}
-                </UBadge>
-              </template>
-
-              <template #status-data="{ row }">
-                <UBadge
-                  :color="getStatusColor(row.status)"
-                  variant="soft"
-                >
-                  {{ getStatusText(row.status) }}
-                </UBadge>
-              </template>
-
-              <template #actions-data="{ row }">
-                <UButton
-                  v-if="row.status === 1"
-                  size="xs"
-                  color="red"
-                  variant="ghost"
-                  @click="handleCancelOrder(row.id)"
-                >
-                  Cancel
-                </UButton>
+            <template #action-cell="{ row }">
+              <UButton
+                v-if="row.original.status === 'open'"
+                size="xs"
+                variant="soft"
+                icon="i-heroicons-x-circle"
+                :loading="cancellingOrderId == row.original.id"
+                @click="handleCancelOrder(row.original.id)">
+                Cancel
+              </UButton>
+              <span v-else class="text-xs text-gray-400 dark:text-gray-600">—</span>
               </template>
             </UTable>
           </UCard>
@@ -354,6 +355,7 @@ const assets: Ref<any[]> = ref([])
 const myOrders: Ref<any[]> = ref([])
 const myTrades: Ref<any[]> = ref([])
 const orderbook: Ref<any> = ref({ buy_orders: [], sell_orders: [] })
+const connectionStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 
 const symbols = ['BTC', 'ETH', 'USDT', 'BNB', 'SOL', 'ADA', 'DOT', 'MATIC']
 const sides = ['buy', 'sell']
@@ -369,62 +371,74 @@ const orderForm = reactive({
 const placingOrder = ref(false)
 const orderError = ref('')
 const orderSuccess = ref(false)
+const cancellingOrderId = ref<number | null>(null)
 
 const orderColumns = [
   { 
+    id: 'symbol',
     accessorKey: 'symbol', 
     header: 'Symbol',
     enableSorting: true 
   },
   { 
+    id: 'side',
     accessorKey: 'side', 
     header: 'Side',
     enableSorting: true 
   },
   { 
+    id: 'price',
     accessorKey: 'price', 
     header: 'Price',
     enableSorting: true 
   },
   { 
+    id: 'amount',
     accessorKey: 'amount', 
     header: 'Amount',
     enableSorting: true 
   },
   { 
+    id: 'status',
     accessorKey: 'status', 
     header: 'Status',
     enableSorting: true 
   },
   { 
+    id: 'action',
     accessorKey: 'actions', 
-    header: '',
+    header: 'Actions',
     enableSorting: false 
   },
 ]
 
 const tradeColumns = [
   { 
+    id: 'symbol',
     accessorKey: 'symbol', 
     header: 'Symbol',
     enableSorting: true 
   },
   { 
+    id: 'side',
     accessorKey: 'side', 
     header: 'Side',
     enableSorting: true 
   },
   { 
+    id: 'price',
     accessorKey: 'price', 
     header: 'Price (USD)',
     enableSorting: true 
   },
   { 
+    id: 'amount',
     accessorKey: 'amount', 
     header: 'Amount',
     enableSorting: true 
   },
   { 
+    id: 'created_at',
     accessorKey: 'created_at', 
     header: 'Date',
     enableSorting: true 
@@ -453,6 +467,7 @@ const loadProfile = async () => {
 
 const fetchOrderbook = async () => {
   const result = await getOrderbook(selectedSymbol.value)
+  
   if (result.success) {
     orderbook.value = result.data
     myOrders.value = result.data.my_orders || []
@@ -543,21 +558,41 @@ const handleQuickSell = (buyOrder: any) => {
 }
 
 const handleCancelOrder = async (orderId: number) => {
-  const result = await cancelOrder(orderId)
+  cancellingOrderId.value = orderId
   
-  if (result.success) {
-    await loadProfile()
-    await fetchOrderbook()
+  try {
+    const result = await cancelOrder(orderId)
     
-    toast.add({
-      title: 'Order Cancelled',
-      description: 'Order cancelled successfully',
-      color: 'green'
-    })
-  } else {
+    cancellingOrderId.value = null
+    
+    if (result.success) {
+      // Update local state immediately
+      const orderIndex = myOrders.value.findIndex(o => o.id === orderId)
+      if (orderIndex !== -1) {
+        myOrders.value[orderIndex].status = 'cancelled'
+      }
+      
+      // Refresh data
+      await loadProfile()
+      await fetchOrderbook()
+      
+      toast.add({
+        title: 'Order Cancelled',
+        description: 'Order cancelled successfully',
+        color: 'green'
+      })
+    } else {
+      toast.add({
+        title: 'Error',
+        description: result.error || 'Failed to cancel order',
+        color: 'red'
+      })
+    }
+  } catch (error) {
+    cancellingOrderId.value = null
     toast.add({
       title: 'Error',
-      description: result.error,
+      description: 'An unexpected error occurred',
       color: 'red'
     })
   }
@@ -567,23 +602,6 @@ const handleLogout = async () => {
   await logout()
 }
 
-const getStatusColor = (status: number) => {
-  switch (status) {
-    case 1: return 'blue'
-    case 2: return 'green'
-    case 3: return 'gray'
-    default: return 'gray'
-  }
-}
-
-const getStatusText = (status: number) => {
-  switch (status) {
-    case 1: return 'OPEN'
-    case 2: return 'FILLED'
-    case 3: return 'CANCELLED'
-    default: return 'UNKNOWN'
-  }
-}
 
 // Pusher setup
 let pusher: Pusher | null = null
@@ -591,66 +609,121 @@ let userChannel: any = null
 let orderbookChannel: any = null
 
 const setupPusher = () => {
-  if (!token.value || !user.value) return
+  if (!token.value || !user.value) {
+    return
+  }
 
-  pusher = new Pusher(config.public.pusherKey, {
-    cluster: config.public.pusherCluster,
-    authEndpoint: `${config.public.backendUrl}/broadcasting/auth`,
-    auth: {
-      headers: {
-        Authorization: `Bearer ${token.value}`,
+  connectionStatus.value = 'connecting'
+
+  try {
+    pusher = new Pusher(config.public.pusherKey, {
+      cluster: config.public.pusherCluster,
+      authEndpoint: `${config.public.backendUrl}/api/broadcasting/auth`,
+      auth: {
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
       },
-    },
-  })
-
-  // Subscribe to user's private channel for order matched events
-  userChannel = pusher.subscribe(`private-App.Models.User.${user.value.id}`)
-
-  userChannel.bind('order.matched', (data: any) => {
-    console.log('Order matched:', data)
-
-    // Update balance
-    if (profile.value) {
-      profile.value.balance = data.new_balance
-    }
-
-    // Update assets
-    assets.value = data.assets
-
-    // Update order status in list
-    const orderIndex = myOrders.value.findIndex(o => o.id === data.order_id)
-    if (orderIndex !== -1) {
-      myOrders.value[orderIndex].status = 2 // FILLED
-    }
-
-    // Refresh orderbook and trades
-    fetchOrderbook()
-    fetchTrades()
-
-    // Show notification
-    toast.add({
-      title: 'Order Matched! 🎉',
-      description: `Your ${data.side} order for ${data.amount} ${data.symbol} was matched at $${data.matched_price}`,
-      color: 'green',
-      timeout: 10000,
     })
 
-    if (data.refund_amount) {
-      toast.add({
-        title: 'Refund Received 💰',
-        description: `You received a refund of $${data.refund_amount}`,
-        color: 'blue',
-        timeout: 10000,
-      })
-    }
-  })
+    // Connection state change handler
+    pusher.connection.bind('state_change', (states: any) => {
+      if (states.current === 'connected') {
+        connectionStatus.value = 'connected'
+      } else if (states.current === 'connecting' || states.current === 'unavailable') {
+        connectionStatus.value = 'connecting'
+      } else {
+        connectionStatus.value = 'disconnected'
+      }
+    })
 
-  // Subscribe to orderbook channel
-  subscribeToOrderbook(selectedSymbol.value)
+    // Connection error handler
+    pusher.connection.bind('error', (err: any) => {
+      toast.add({
+        title: 'Connection Error',
+        description: 'Failed to connect to real-time updates',
+        color: 'red',
+        timeout: 5000,
+      })
+    })
+
+    // Subscribe to user's private channel for order matched events
+    userChannel = pusher.subscribe(`private-App.Models.User.${user.value.id}`)
+
+    userChannel.bind('order.matched', (data: any) => {
+      // Update balance (event sends the user's updated balance)
+      if (profile.value && data.new_balance) {
+        profile.value.balance = data.new_balance
+      }
+
+      // Update assets (event sends the user's updated assets)
+      if (data.assets) {
+        assets.value = data.assets
+      }
+
+      // Update order status in list
+      const orderIndex = myOrders.value.findIndex(o => o.id === data.order_id)
+      if (orderIndex !== -1) {
+        myOrders.value[orderIndex].status = 'filled'
+      }
+
+      // Refresh orderbook and trades
+      fetchOrderbook()
+      fetchTrades()
+
+      // Show personalized notification based on side
+      if (data.side === 'buy') {
+        // User bought crypto
+        toast.add({
+          title: 'Purchase Complete!',
+          description: `Successfully bought ${data.amount} ${data.symbol} at $${data.matched_price}`,
+          color: 'green',
+          timeout: 10000,
+          icon: 'i-heroicons-shopping-cart'
+        })
+        
+        // Play success sound (optional)
+        if (typeof window !== 'undefined') {
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjtm0PLMdzAFH3Hn7OGVRwoSZr3t56ZSEglLoeTvvW0hBzxr0PLMdjAFHnHm7eKWRgsRZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHnHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRgoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0hBzxr0PLMdjAFHXHm7eKWRwoSZr3t56ZSEglKouTvvG0h')
+          audio.volume = 0.3
+          audio.play().catch(() => {})
+        }
+      } else {
+        // User sold crypto
+        toast.add({
+          title: 'Sale Complete!',
+          description: `Successfully sold ${data.amount} ${data.symbol} at $${data.matched_price}`,
+          color: 'green',
+          timeout: 10000,
+          icon: 'i-heroicons-banknotes'
+        })
+      }
+
+      // Show refund notification if applicable
+      if (data.refund_amount && parseFloat(data.refund_amount) > 0) {
+        toast.add({
+          title: 'Bonus Refund!',
+          description: `Price difference refund: $${data.refund_amount}`,
+          color: 'blue',
+          timeout: 10000,
+          icon: 'i-heroicons-currency-dollar'
+        })
+      }
+    })
+
+    // Subscribe to orderbook channel
+    subscribeToOrderbook(selectedSymbol.value)
+  } catch (error) {
+    connectionStatus.value = 'disconnected'
+  }
 }
 
 const subscribeToOrderbook = (symbol: string) => {
-  if (!pusher) return
+  if (!pusher) {
+    return
+  }
 
   // Unsubscribe from previous orderbook channel if exists
   if (orderbookChannel) {
@@ -662,10 +735,37 @@ const subscribeToOrderbook = (symbol: string) => {
   orderbookChannel = pusher.subscribe(`orderbook.${symbol}`)
 
   orderbookChannel.bind('orderbook.updated', (data: any) => {
-    console.log('Orderbook updated:', data)
-
-    // Refresh orderbook to get latest data
-    fetchOrderbook()
+    // Only refresh if it's for the current symbol
+    if (data.symbol === selectedSymbol.value) {
+      fetchOrderbook()
+      
+      // Show notification based on action type
+      if (data.action === 'created') {
+        toast.add({
+          title: 'New Order Available',
+          description: `A new ${data.order?.side || ''} order appeared in ${data.symbol} orderbook`,
+          color: 'blue',
+          timeout: 3000,
+          icon: 'i-heroicons-plus-circle'
+        })
+      } else if (data.action === 'cancelled') {
+        toast.add({
+          title: 'Order Cancelled',
+          description: `An order was removed from ${data.symbol} orderbook`,
+          color: 'gray',
+          timeout: 2000,
+          icon: 'i-heroicons-x-circle'
+        })
+      } else if (data.action === 'matched') {
+        toast.add({
+          title: 'Orders Matched',
+          description: `Orders were matched in ${data.symbol} orderbook`,
+          color: 'green',
+          timeout: 3000,
+          icon: 'i-heroicons-check-circle'
+        })
+      }
+    }
   })
 }
 
@@ -681,6 +781,8 @@ const cleanupPusher = () => {
   if (pusher) {
     pusher.disconnect()
   }
+  
+  connectionStatus.value = 'disconnected'
 }
 
 // Lifecycle
