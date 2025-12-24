@@ -57,6 +57,21 @@ class Order extends Model
     }
 
     /**
+     * Cast the status on retrieval
+     *
+     * @param int $value
+     * @return string
+     */
+    public function getStatusAttribute($value)
+    {
+        return match ($value) {
+            self::STATUS_OPEN => 'open',
+            self::STATUS_FILLED => 'filled',
+            self::STATUS_CANCELLED => 'cancelled',
+        };
+    }
+
+    /**
      * Get the user that owns the order.
      */
     public function user(): BelongsTo
