@@ -22,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'balance',
     ];
 
     /**
@@ -44,6 +45,47 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'balance' => 'decimal:2',
         ];
+    }
+
+    /**
+     * Get the assets for the user.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<Asset>
+     */
+    public function assets(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Asset::class);
+    }
+
+    /**
+     * Get the orders for the user.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<Order>
+     */
+    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Get the buy trades for the user.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<Trade>
+     */
+    public function buyTrades(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Trade::class, 'buyer_id');
+    }
+
+    /**
+     * Get the sell trades for the user.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<Trade>
+     */
+    public function sellTrades(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Trade::class, 'seller_id');
     }
 }
