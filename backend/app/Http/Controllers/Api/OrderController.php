@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
+use App\Jobs\MatchOrderJob;
 use App\Models\Asset;
 use App\Models\Order;
 use Illuminate\Http\JsonResponse;
@@ -126,6 +127,9 @@ class OrderController extends Controller
             'status' => Order::STATUS_OPEN,
         ]);
 
+        // Dispatch matching job
+        MatchOrderJob::dispatch($order->id);
+
         return response()->json([
             'message' => 'Buy order created successfully.',
             'order' => $order->fresh(),
@@ -187,6 +191,9 @@ class OrderController extends Controller
             'amount' => $validated['amount'],
             'status' => Order::STATUS_OPEN,
         ]);
+
+        // Dispatch matching job
+        MatchOrderJob::dispatch($order->id);
 
         return response()->json([
             'message' => 'Sell order created successfully.',

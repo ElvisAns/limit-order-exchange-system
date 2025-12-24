@@ -11,10 +11,16 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create a test user with known credentials
+        // Create 2 test users with known credentials
         \App\Models\User::factory()->create([
-            'name' => 'Test User',
+            'name' => 'Test User 1',
             'email' => 'test@example.com',
+            'balance' => 50000.00,
+        ]);
+
+        \App\Models\User::factory()->create([
+            'name' => 'Test User 2',
+            'email' => 'test2@example.com',
             'balance' => 50000.00,
         ]);
 
