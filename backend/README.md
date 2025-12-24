@@ -54,6 +54,8 @@ POST /api/orders/{id}/cancel - Cancel order
 GET  /api/trades - Get user trades
 ```
 
+Full Postman documentation can be seen at https://documenter.getpostman.com/view/14572798/2sBXVZoZxE
+
 ## Database Schema
 
 **users**: `id`, `name`, `email`, `password`, `balance` (USD)  
