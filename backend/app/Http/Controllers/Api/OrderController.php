@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\OrderbookUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Jobs\MatchOrderJob;
@@ -49,6 +50,7 @@ class OrderController extends Controller
 
         $buyOrders = Order::query()
             ->where('symbol', $symbol)
+            ->where('user_id', '!=', $request->user()->id) // Prevent self-trading, it is already handled but we just want to exclude it from the results
             ->where('side', Order::SIDE_BUY)
             ->where('status', Order::STATUS_OPEN)
             ->orderBy('created_at', 'desc')
@@ -58,6 +60,7 @@ class OrderController extends Controller
 
         $sellOrders = Order::query()
             ->where('symbol', $symbol)
+            ->where('user_id', '!=', $request->user()->id) // Prevent self-trading, it is already handled but we just want to exclude it from the results
             ->where('side', Order::SIDE_SELL)
             ->where('status', Order::STATUS_OPEN)
             ->orderBy('created_at', 'desc')
@@ -65,10 +68,20 @@ class OrderController extends Controller
             ->orderBy('price', 'asc')
             ->get();
 
+        $myOrders = Order::query()
+            ->where('symbol', $symbol)
+            ->where('user_id', $request->user()->id)
+            ->where('status', Order::STATUS_OPEN)
+            ->orderBy('created_at', 'desc')
+            ->orderBy('amount', 'desc')
+            ->orderBy('price', 'asc')
+            ->get();
+
         return response()->json([
             'symbol' => $symbol,
             'buy_orders' => $buyOrders,
             'sell_orders' => $sellOrders,
+            'my_orders' => $myOrders,
         ]);
     }
 
@@ -129,6 +142,19 @@ class OrderController extends Controller
 
         // Dispatch matching job
         MatchOrderJob::dispatch($order->id);
+
+        // Broadcast orderbook update
+        OrderbookUpdated::dispatch(
+            $validated['symbol'],
+            'created',
+            [
+                'id' => $order->id,
+                'side' => $order->side,
+                'price' => $order->price,
+                'amount' => $order->amount,
+                'user_id' => $order->user_id,
+            ]
+        );
 
         return response()->json([
             'message' => 'Buy order created successfully.',
@@ -194,6 +220,19 @@ class OrderController extends Controller
 
         // Dispatch matching job
         MatchOrderJob::dispatch($order->id);
+
+        // Broadcast orderbook update
+        OrderbookUpdated::dispatch(
+            $validated['symbol'],
+            'created',
+            [
+                'id' => $order->id,
+                'side' => $order->side,
+                'price' => $order->price,
+                'amount' => $order->amount,
+                'user_id' => $order->user_id,
+            ]
+        );
 
         return response()->json([
             'message' => 'Sell order created successfully.',
@@ -271,6 +310,18 @@ class OrderController extends Controller
             $order->update([
                 'status' => Order::STATUS_CANCELLED,
             ]);
+
+            // Broadcast orderbook update
+            OrderbookUpdated::dispatch(
+                $order->symbol,
+                'cancelled',
+                [
+                    'id' => $order->id,
+                    'side' => $order->side,
+                    'price' => $order->price,
+                    'amount' => $order->amount,
+                ]
+            );
 
             return response()->json([
                 'message' => 'Order cancelled successfully.',

@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Events\OrderbookUpdated;
+use App\Events\OrderMatched;
 use App\Models\Asset;
 use App\Models\Order;
 use App\Models\Trade;
@@ -201,5 +203,49 @@ class MatchOrderJob implements ShouldQueue
             'price' => $matchedPrice,
             'amount' => $amount,
         ]);
+
+        // Broadcast to buyer
+        $this->broadcastToUser($buyer, 'buy', $buyOrder->id, $newOrder->symbol, $amount, $matchedPrice, $refundAmount ?? null);
+
+        // Broadcast to seller
+        $this->broadcastToUser($seller, 'sell', $sellOrder->id, $newOrder->symbol, $amount, $matchedPrice);
+
+        // Broadcast orderbook update (orders were matched/filled)
+        OrderbookUpdated::dispatch($newOrder->symbol, 'matched');
+    }
+
+    /**
+     * Broadcast order matched event to user.
+     */
+    protected function broadcastToUser($user, string $side, int $orderId, string $symbol, string $amount, string $matchedPrice, ?string $refundAmount = null): void
+    {
+        // Refresh user to get latest balance
+        $user->refresh();
+
+        // Get user's current assets
+        $assets = Asset::query()
+            ->where('user_id', $user->id)
+            ->get()
+            ->map(function ($asset) {
+                return [
+                    'symbol' => $asset->symbol,
+                    'amount' => $asset->amount,
+                    'locked_amount' => $asset->locked_amount,
+                ];
+            })
+            ->toArray();
+
+        // Dispatch the broadcast event
+        OrderMatched::dispatch(
+            $user->id,
+            $side,
+            $orderId,
+            $symbol,
+            $amount,
+            $matchedPrice,
+            (string) $user->balance,
+            $assets,
+            $refundAmount
+        );
     }
 }
