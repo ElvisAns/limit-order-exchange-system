@@ -257,8 +257,9 @@ class OrderController extends Controller
             ->where('id', $id)
             ->where('user_id', $user->id)
             ->firstOrFail();
+        
 
-        if ($order->status !== Order::STATUS_OPEN) {
+        if ($order->status != 'open') { //because we are getting after casting the status to string
             return response()->json([
                 'message' => 'Only open orders can be cancelled.',
             ], 400);
