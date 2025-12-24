@@ -2,6 +2,8 @@
 
 Real-time cryptocurrency exchange with automatic order matching. Built with Laravel 12 and Nuxt 3.
 
+![Dashboard Screenshot](screenshot.png)
+
 ## Features
 
 - **Trading**: Place buy/sell limit orders with automatic matching
